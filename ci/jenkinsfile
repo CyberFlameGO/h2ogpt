@@ -1,0 +1,103 @@
+#!/usr/bin/groovy
+
+@Library('test-shared-library@dai_pipeline') _
+
+import ai.h2o.ci.buildsummary.StagesSummary
+import groovy.json.JsonOutput
+
+buildSummary('https://github.com/h2ogpt', true)
+buildSummary.get().addStagesSummary(this, new StagesSummary())
+
+def ALL_TESTS = [
+        "test_osx_py38":  [ target: "test", node: "osx",     env: ['PYTHON_ENV=/Users/jenkins/anaconda/envs/h2ogpt-py3.8'] ],
+        "test_dl17_py38": [ target: "test", node: "mr-dl17", env: ['PYTHON_ENV=/home/jenkins/miniconda3/envs/h2ogpt-py3.8'] ],
+]
+
+pipeline {
+    agent none
+    parameters {
+        booleanParam(name: 'onlyRunSmokeTests', defaultValue: false, description: 'Only run smoke tests')
+        text(
+                name: "testTargets",
+                defaultValue: "${ALL_TESTS.keySet().join('\n')}",
+                description: "A select set of tests to run")
+        booleanParam(name: 'uploadToHF', defaultValue: false, description: 'Upload to HF')
+    }
+    options {
+        ansiColor('xterm')
+        timestamps()
+        timeout(time: 60, unit: 'MINUTES')
+    }
+    stages {
+        stage('Smoke test') {
+            agent {
+                label "linux && docker"
+            }
+            steps {
+                script {
+                    sh "make IS_PR_BUILD=${isPrBranch()} BUILD_NUMBER=${env.BUILD_ID} BUILD_BASE_NAME=${env.JOB_BASE_NAME} test_smoke"
+                    arch: 'smoke.log'
+                }
+            }
+        }
+
+        stage('Tests') {
+            when {
+                anyOf {
+                    expression { return !params.onlyRunSmokeTests }
+                }
+                beforeAgent true
+            }
+            agent {
+                label "linux && docker"
+            }
+            steps {
+                script {
+                    def test_targets = [:]
+                    params.testTargets.split('\n').findAll{ it.contains("test_") }.each { test_name ->
+                        test_targets[test_name] = {
+                            node("${ALL_TESTS[test_name].node}") {
+                                buildSummary.stageWithSummary("${test_name}", "${test_name}") {
+                                    buildSummary.setStageUrl("${test_name}")
+                                    script {
+                                        try {
+                                            dir("${test_name}") {
+                                                withEnv(ALL_TESTS[test_name].env) {
+                                                    deleteDir()
+                                                    checkout scm
+                                                    sh "make PYTEST_TEST_NAME=_${test_name} IS_PR_BUILD=${isPrBranch()} BUILD_NUMBER=${env.BUILD_ID} BUILD_BASE_NAME=${env.JOB_BASE_NAME} PYTHON_ENV=${PYTHON_ENV} ${ALL_TESTS[test_name].target}"
+                                                    sh "mv test_report.xml ${test_name}_report.xml"
+                                                }
+                                            }
+                                            archiveArtifacts allowEmptyArchive: true, artifacts: "${test_name}/${test_name}_report.xml"
+                                        } finally {
+                                            junit testResults: "${test_name}/${test_name}_report.xml", keepLongStdio: true, allowEmptyResults: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    parallel(test_targets)
+                }
+            }
+        }
+
+        stage('Publish to HF') {
+            agent {
+                label "linux && docker"
+            }
+            steps {
+                script {
+                    sh "make IS_PR_BUILD=${isPrBranch()} BUILD_NUMBER=${env.BUILD_ID} BUILD_BASE_NAME=${env.JOB_BASE_NAME} publish"
+                }
+            }
+        }
+    }
+}
+
+def isPrBranch() {
+    return (env.CHANGE_BRANCH != null && env.CHANGE_BRANCH != '') ||
+            (env.BRANCH_NAME != null && env.BRANCH_NAME.startsWith("PR-"))
+}
