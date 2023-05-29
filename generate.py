@@ -1471,7 +1471,7 @@ def score_qa(smodel, stokenizer, max_length_tokenize, question, answer, cutoff_l
     return score
 
 
-if __name__ == "__main__":
+def entrypoint_main():
     """
     Examples:
 
@@ -1502,3 +1502,6 @@ if __name__ == "__main__":
     python generate.py --base_model=h2oai/h2ogpt-oig-oasst1-512-6_9b
     """
     fire.Fire(main)
+
+if __name__ == "__main__":
+    entrypoint_main()

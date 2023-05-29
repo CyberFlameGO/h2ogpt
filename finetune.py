@@ -637,7 +637,7 @@ def test_debug():
     fire.Fire(train)
 
 
-if __name__ == "__main__":
+def entrypoint_main():
     CONFIG = "NCCL_P2P_LEVEL=LOC WORLD_SIZE=5 torchrun --nnodes=5 --master_addr=10.10.10.2 --master_port=1111 --nproc_per_node=1"
     CMD = "finetune.py --data_path=config.json --num_epochs=1 --base_model=decapoda-research/llama-13b-hf"
     log(f"""
@@ -667,3 +667,7 @@ NCCL_P2P_LEVEL=LOC WORLD_SIZE=7 CUDA_VISIBLE_DEVICES="0,1" torchrun --node_rank 
         assert os.environ.get("CUDA_VISIBLE_DEVICES") is not None, "Run python script using: torchrun finetune.py OR set CUDA_VISIBLE_DEVICES to single GPU"
 
     fire.Fire(train)
+
+
+if __name__ == "__main__":
+    entrypoint_main()

@@ -9,8 +9,8 @@ buildSummary('https://github.com/h2ogpt', true)
 buildSummary.get().addStagesSummary(this, new StagesSummary())
 
 def ALL_TESTS = [
-        "test_osx_py38":  [ target: "test", node: "osx",     env: ['PYTHON_ENV=/Users/jenkins/anaconda/envs/h2ogpt-py3.8'] ],
-        "test_dl17_py38": [ target: "test", node: "mr-dl17", env: ['PYTHON_ENV=/home/jenkins/miniconda3/envs/h2ogpt-py3.8'] ],
+        "test_osx_py38":  [ setup_target: "test_setup_cpu", test_target: "test", node: "osx",     env: ['PYTHON_ENV=/Users/jenkins/anaconda/envs/h2ogpt-py3.8'] ],
+        "test_dl17_py38": [ setup_target: "test_setup_cpu", test_target: "test", node: "mr-dl17", env: ['PYTHON_ENV=/home/jenkins/miniconda3/envs/h2ogpt-py3.8'] ],
 ]
 
 pipeline {
@@ -35,8 +35,12 @@ pipeline {
             }
             steps {
                 script {
-                    sh "make IS_PR_BUILD=${isPrBranch()} BUILD_NUMBER=${env.BUILD_ID} BUILD_BASE_NAME=${env.JOB_BASE_NAME} test_smoke"
-                    arch: 'smoke.log'
+                    try {
+                        sh "make PYTEST_TEST_NAME=_smoke_test test_smoke"
+                    } finally {
+                        archiveArtifacts allowEmptyArchive: true, artifacts: "smoke_test_report.xml"
+                        junit testResults: "smoke_test_report.xml", keepLongStdio: true, allowEmptyResults: true
+                    }
                 }
             }
         }
@@ -65,7 +69,8 @@ pipeline {
                                                 withEnv(ALL_TESTS[test_name].env) {
                                                     deleteDir()
                                                     checkout scm
-                                                    sh "make PYTEST_TEST_NAME=_${test_name} IS_PR_BUILD=${isPrBranch()} BUILD_NUMBER=${env.BUILD_ID} BUILD_BASE_NAME=${env.JOB_BASE_NAME} PYTHON_ENV=${PYTHON_ENV} ${ALL_TESTS[test_name].target}"
+                                                    sh "make PYTHON_ENV=${PYTHON_ENV} ${ALL_TESTS[test_name].setup_target}"
+                                                    sh "make PYTHON_ENV=${PYTHON_ENV} PYTEST_TEST_NAME=_${test_name} IS_PR_BUILD=${isPrBranch()} BUILD_NUMBER=${env.BUILD_ID} BUILD_BASE_NAME=${env.JOB_BASE_NAME} ${ALL_TESTS[test_name].test_target}"
                                                 }
                                             }
                                         } finally {
