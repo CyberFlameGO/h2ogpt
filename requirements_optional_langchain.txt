@@ -3,7 +3,7 @@
 
 # optional for chat with PDF
 langchain==0.0.183
-pypdf==3.8.1
+pypdf==3.9.0
 tiktoken==0.3.3
 # avoid textract, requires old six
 #textract==1.6.5
