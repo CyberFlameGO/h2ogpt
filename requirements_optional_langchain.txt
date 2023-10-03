@@ -29,7 +29,7 @@ unstructured[local-inference]==0.6.6
 pillow
 
 pdfminer.six==20221105
-urllib3==1.26.6
+urllib3==1.26.17
 requests_file==1.5.1
 
 #pdf2image==1.16.3
